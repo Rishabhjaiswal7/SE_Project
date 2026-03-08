@@ -1,0 +1,17 @@
+<h2>Admin Dashboard - Search Person</h2>
+
+<form method="POST">
+    Enter Username:
+    <input type="text" name="username">
+    <button type="submit">Search</button>
+</form>
+
+{% if user %}
+    <h3>Location Details:</h3>
+    <p>Name: {{ user.username }}</p>
+    <p>Floor: {{ user.floor }}</p>
+    <p>Room: {{ user.room }}</p>
+    <p>Current Location: {{ user.current_location }}</p>
+{% endif %}
+
+<a href="/logout">Logout</a>
