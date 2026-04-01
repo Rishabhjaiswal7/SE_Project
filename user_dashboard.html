@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Z-Traces — User Dashboard</title>
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Syne:wght@400;700;800&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --bg:#050a0e; --surface:#0d1b24; --surface2:#0f2030;
+      --border:#1a3a4a; --accent:#00d4ff; --accent2:#00ff9d;
+      --warn:#ff6b35; --text:#cce8f0; --muted:#4a7a8a;
+      --font-mono:'Share Tech Mono',monospace; --font-display:'Syne',sans-serif;
+    }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{background:var(--bg);color:var(--text);font-family:var(--font-mono);min-height:100vh;}
+
+    /* Grid bg */
+    body::before{
+      content:'';position:fixed;inset:0;pointer-events:none;
+      background-image:linear-gradient(rgba(0,212,255,0.03) 1px,transparent 1px),
+        linear-gradient(90deg,rgba(0,212,255,0.03) 1px,transparent 1px);
+      background-size:40px 40px;
+    }
+
+    /* Topbar */
+    .topbar{
+      position:sticky;top:0;z-index:100;
+      background:rgba(5,10,14,.95);backdrop-filter:blur(12px);
+      border-bottom:1px solid var(--border);
+      display:flex;align-items:center;justify-content:space-between;
+      padding:0 32px;height:56px;
+    }
+    .topbar-brand{font-family:var(--font-display);font-weight:800;font-size:1.1rem;
+      background:linear-gradient(135deg,var(--accent),var(--accent2));
+      -webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+    .topbar-info{display:flex;align-items:center;gap:20px;font-size:.75rem;color:var(--muted);}
+    .badge{background:rgba(0,212,255,0.1);border:1px solid rgba(0,212,255,0.3);
+      color:var(--accent);padding:3px 10px;font-size:.65rem;letter-spacing:.12em;text-transform:uppercase;}
+    .btn-logout{background:none;border:1px solid var(--border);color:var(--muted);
+      font-family:var(--font-mono);font-size:.7rem;padding:6px 14px;cursor:pointer;
+      letter-spacing:.1em;transition:all .2s;}
+    .btn-logout:hover{border-color:var(--warn);color:var(--warn);}
+
+    .layout{display:block;min-height:calc(100vh - 56px);}
+
+    /* Main area */
+    .main{padding:28px 32px;}
+
+    /* Section heading */
+    .sec-head{display:flex;align-items:center;gap:10px;margin-bottom:20px;}
+    .sec-head h2{font-family:var(--font-display);font-weight:700;font-size:1rem;letter-spacing:.08em;}
+    .sec-head::after{content:'';flex:1;height:1px;background:var(--border);}
+    .tag{font-size:.6rem;letter-spacing:.15em;text-transform:uppercase;
+      background:rgba(0,212,255,0.1);border:1px solid rgba(0,212,255,0.25);
+      color:var(--accent);padding:2px 8px;}
+
+    /* Locate card */
+    .locate-card{
+      background:var(--surface);border:1px solid var(--border);
+      padding:28px;position:relative;margin-bottom:24px;
+    }
+    .locate-card::before{content:'';position:absolute;top:-1px;left:-1px;
+      width:14px;height:14px;border-top:2px solid var(--accent);border-left:2px solid var(--accent);}
+    .locate-card::after{content:'';position:absolute;bottom:-1px;right:-1px;
+      width:14px;height:14px;border-bottom:2px solid var(--accent2);border-right:2px solid var(--accent2);}
+
+    /* Floor map visual */
+    .floor-map{
+      background:#070f15;border:1px solid var(--border);
+      height:260px;margin-bottom:20px;position:relative;overflow:hidden;
+      display:flex;align-items:center;justify-content:center;
+    }
+    .floor-map svg{width:100%;height:100%;}
+
+    /* Ping dot */
+    .ping-dot{
+      position:absolute;width:16px;height:16px;
+      background:var(--accent);border-radius:50%;
+      transform:translate(-50%,-50%);
+      box-shadow:0 0 0 0 rgba(0,212,255,0.6);
+      animation:pingAnim 2s infinite;display:none;
+      transition:left .8s ease, top .8s ease;
+    }
+    @keyframes pingAnim{
+      0%{box-shadow:0 0 0 0 rgba(0,212,255,.6)}
+      70%{box-shadow:0 0 0 18px rgba(0,212,255,0)}
+      100%{box-shadow:0 0 0 0 rgba(0,212,255,0)}
+    }
+
+    .loc-info-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:20px;}
+    .loc-chip{background:#070f15;border:1px solid var(--border);padding:14px 16px;}
+    .loc-chip .lc-label{font-size:.62rem;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);margin-bottom:6px;}
+    .loc-chip .lc-val{font-family:var(--font-display);font-size:1.2rem;font-weight:700;color:var(--accent);}
+    .loc-chip .lc-val.green{color:var(--accent2);}
+
+    .btn-locate{
+      background:transparent;border:1px solid var(--accent);
+      color:var(--accent);font-family:var(--font-display);font-weight:700;
+      font-size:.82rem;letter-spacing:.18em;text-transform:uppercase;
+      padding:14px 28px;cursor:pointer;transition:all .25s;
+      position:relative;overflow:hidden;
+    }
+    .btn-locate::before{content:'';position:absolute;inset:0;background:var(--accent);
+      transform:translateX(-100%);transition:.25s;z-index:0;}
+    .btn-locate:hover::before{transform:translateX(0);}
+    .btn-locate:hover{color:var(--bg);}
+    .btn-locate span{position:relative;z-index:1;}
+    .btn-locate:disabled{opacity:.4;cursor:not-allowed;}
+    .btn-locate.scanning span::after{content:' ...';animation:dots 1.2s infinite;}
+    @keyframes dots{0%{content:' .'}33%{content:' ..'}66%{content:' ...'}100%{content:' .'}}
+
+    /* Wi-Fi signals panel */
+    .signal-list{display:flex;flex-direction:column;gap:8px;margin-top:16px;}
+    .signal-row{
+      display:flex;align-items:center;gap:12px;
+      background:#070f15;border:1px solid var(--border);padding:10px 14px;
+      font-size:.75rem;
+    }
+    .signal-ssid{flex:1;color:var(--text);}
+    .signal-bssid{color:var(--muted);font-size:.68rem;flex:1;}
+    .rssi-bar-wrap{width:80px;height:6px;background:#1a3a4a;border-radius:3px;overflow:hidden;}
+    .rssi-bar{height:100%;border-radius:3px;background:linear-gradient(90deg,var(--warn),var(--accent));transition:width .5s;}
+    .rssi-val{color:var(--accent2);font-size:.72rem;min-width:42px;text-align:right;}
+
+
+  </style>
+</head>
+<body>
+<div class="topbar">
+  <div class="topbar-brand">Z-TRACES</div>
+  <div class="topbar-info">
+    <span class="badge">USER</span>
+    <span id="userName">Loading...</span>
+    <button class="btn-logout" onclick="logout()">Logout</button>
+  </div>
+</div>
+
+<div class="layout">
+  <!-- Main -->
+  <div class="main">
+    <div class="sec-head">
+      <h2>Locate Current Position</h2>
+      <span class="tag">Real-time</span>
+    </div>
+
+    <div class="locate-card"> 
