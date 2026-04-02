@@ -142,4 +142,103 @@
       color: var(--warn); font-size: .75rem; padding: 10px 12px;
       margin-bottom: 16px; display: none;
     }
-  
+    .error-msg.show { display: block; }
+  </style>
+</head>
+<body>
+<div class="login-wrap">
+  <div class="brand">
+    <div class="brand-signal">
+      <div class="signal-bars">
+        <span></span><span></span><span></span><span></span>
+      </div>
+    </div>
+    <h1>Z-TRACES</h1>
+    <p>Wi-Fi Indoor Positioning System · ALPHACODERS</p>
+  </div>
+
+  <div class="card">
+    <div class="section-label">Authentication</div>
+
+    <div id="errorMsg" class="error-msg"></div>
+
+    <div class="form-group">
+      <label>Select Role</label>
+      <div class="role-select">
+        <button class="role-btn active" onclick="selectRole(this,'user')">User</button>
+        <button class="role-btn" onclick="selectRole(this,'admin')">Admin</button>
+        <button class="role-btn" onclick="selectRole(this,'operator')">Operator</button>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>Username / Email</label>
+      <input type="text" id="username" placeholder="Enter your username" autocomplete="off"/>
+    </div>
+    <div class="form-group">
+      <label>Password</label>
+      <input type="password" id="password" placeholder="••••••••"/>
+    </div>
+
+    <button class="btn-login" onclick="doLogin()"><span>Authenticate &rarr;</span></button>
+
+    <div class="status-line">
+      <span class="dot"></span>
+      <span>System Online &mdash; Fingerprint DB Connected</span>
+    </div>
+  </div>
+</div>
+
+<script>
+  let selectedRole = 'user';
+
+  function selectRole(btn, role) {
+    document.querySelectorAll('.role-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    selectedRole = role;
+  }
+
+  async function doLogin() {
+    const username = document.getElementById('username').value.trim();
+    const password = document.getElementById('password').value;
+    const errEl    = document.getElementById('errorMsg');
+    errEl.classList.remove('show');
+
+    if (!username || !password) {
+      errEl.textContent = 'Please enter both username and password.';
+      errEl.classList.add('show');
+      return;
+    }
+
+    try {
+      const res  = await fetch('/api/login', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ username, password, role: selectedRole })
+      });
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        localStorage.setItem('zt_token', data.token);
+        localStorage.setItem('zt_role',  data.role);
+        localStorage.setItem('zt_user',  JSON.stringify(data.user));
+        const redirectMap = {
+          admin:    'admin_dashboard.html',
+          operator: 'operator_dashboard.html',
+          user:     'user_dashboard.html'
+        };
+        window.location.href = redirectMap[data.role] || 'user_dashboard.html';
+      } else {
+        errEl.textContent = data.message || 'Invalid credentials.';
+        errEl.classList.add('show');
+      }
+    } catch (e) {
+      errEl.textContent = 'Server not running. Please start backend — run start.bat or python app.py';
+      errEl.classList.add('show');
+    }
+  }
+
+  document.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+</script>
+</body>
+</html>
