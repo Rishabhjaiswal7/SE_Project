@@ -25,28 +25,3 @@ def create_app():
 
     # Initialize Database mapping & indexes
     init_db()
-
-    # Register decoupled API blueprints
-    app.register_blueprint(auth_bp)
-    app.register_blueprint(admin_bp)
-    app.register_blueprint(location_bp)
-    app.register_blueprint(data_bp)
-
-    # Apply global error configurations
-    register_error_handlers(app)
-
-    @app.route("/")
-    def index():
-        return send_from_directory(".", "index.html")
-
-    @app.route("/<path:path>")
-    def static_files(path):
-        return send_from_directory(".", path)
-
-    log.info("Z-Traces Backend Production Architecture fully dynamically assembled.")
-    return app
-
-app = create_app()
-
-if __name__ == "__main__":
-    app.run(debug=Config.DEBUG, host="0.0.0.0", port=5000)
