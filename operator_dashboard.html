@@ -306,7 +306,8 @@
     if(id==='floors') loadAPs().then(()=>initFloorSelector());
     if(id==='fingerprints') { loadAPs(); loadFPs(); }
   }
- // ─── State ───────────────────────────────────────────────
+
+  // ─── State ───────────────────────────────────────────────
   let APs = [], filteredAPs = [];
   let FPs = [], filteredFPs = [];
   let currentFloor = 1;
