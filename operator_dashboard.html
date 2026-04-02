@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Z-Traces — System Operator</title>
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Syne:wght@400;700;800&display=swap" rel="stylesheet"/>
+  <style>
+    :root{
+      --bg:#050a0e;--surface:#0d1b24;--surface2:#0f2030;
+      --border:#1a3a4a;--accent:#00d4ff;--accent2:#00ff9d;
+      --warn:#ff6b35;--purple:#b06cff;--text:#cce8f0;--muted:#4a7a8a;
+      --font-mono:'Share Tech Mono',monospace;--font-display:'Syne',sans-serif;
+    }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{background:var(--bg);color:var(--text);font-family:var(--font-mono);min-height:100vh;}
+    body::before{
+      content:'';position:fixed;inset:0;pointer-events:none;
+      background-image:linear-gradient(rgba(0,255,157,0.025) 1px,transparent 1px),
+        linear-gradient(90deg,rgba(0,255,157,0.025) 1px,transparent 1px);
+      background-size:40px 40px;
+    }
+    .topbar{
+      position:sticky;top:0;z-index:100;background:rgba(5,10,14,.95);
+      backdrop-filter:blur(12px);border-bottom:1px solid var(--border);
+      display:flex;align-items:center;justify-content:space-between;padding:0 32px;height:56px;
+    }
+    .topbar-brand{font-family:var(--font-display);font-weight:800;font-size:1.1rem;
+      background:linear-gradient(135deg,var(--accent2),var(--accent));
+      -webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+    .badge{background:rgba(0,255,157,.1);border:1px solid rgba(0,255,157,.3);
+      color:var(--accent2);padding:3px 10px;font-size:.65rem;letter-spacing:.12em;text-transform:uppercase;}
+    .btn-logout{background:none;border:1px solid var(--border);color:var(--muted);
+      font-family:var(--font-mono);font-size:.7rem;padding:6px 14px;cursor:pointer;transition:all .2s;}
+    .btn-logout:hover{border-color:var(--warn);color:var(--warn);}
+
+    .tabs{display:flex;border-bottom:1px solid var(--border);padding:0 32px;}
+    .tab{padding:16px 24px;font-size:.75rem;letter-spacing:.12em;text-transform:uppercase;
+      cursor:pointer;color:var(--muted);border-bottom:2px solid transparent;transition:all .2s;}
+    .tab:hover{color:var(--text);}
+    .tab.active{color:var(--accent2);border-bottom-color:var(--accent2);}
+
+    .tab-content{display:none;padding:32px;}
+    .tab-content.active{display:block;}
+
+    .sec-head{display:flex;align-items:center;gap:10px;margin-bottom:20px;}
+    .sec-head h2{font-family:var(--font-display);font-weight:700;font-size:1rem;letter-spacing:.08em;}
+    .sec-head::after{content:'';flex:1;height:1px;background:var(--border);}
+
+    /* Action bar */
+    .action-bar{display:flex;gap:12px;margin-bottom:24px;align-items:center;}
+    .action-bar input,.action-bar select{
+      background:#070f15;border:1px solid var(--border);color:var(--text);
+      font-family:var(--font-mono);font-size:.75rem;padding:9px 12px;outline:none;
+    }
+    .action-bar input:focus,.action-bar select:focus{border-color:var(--accent2);}
+    .btn-add{
+      background:transparent;border:1px solid var(--accent2);color:var(--accent2);
+      font-family:var(--font-display);font-weight:700;font-size:.75rem;letter-spacing:.15em;
+      text-transform:uppercase;padding:10px 20px;cursor:pointer;transition:all .2s;white-space:nowrap;
+    }
+    .btn-add:hover{background:rgba(0,255,157,.08);}
+
+    /* AP Table */
+    table{width:100%;border-collapse:collapse;font-size:.78rem;}
+    thead th{background:#070f15;border-bottom:1px solid var(--border);
+      padding:10px 14px;text-align:left;font-size:.63rem;letter-spacing:.15em;
+      text-transform:uppercase;color:var(--muted);}
+    tbody tr{border-bottom:1px solid rgba(26,58,74,.5);transition:background .15s;}
+    tbody tr:hover{background:rgba(0,255,157,0.03);}
+    tbody td{padding:12px 14px;vertical-align:middle;}
+    .status-dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px;}
+    .status-dot.on{background:var(--accent2);box-shadow:0 0 6px var(--accent2);}
+    .status-dot.off{background:var(--warn);}
+    .btn-sm{background:none;border:1px solid var(--border);color:var(--muted);
+      font-family:var(--font-mono);font-size:.63rem;padding:3px 10px;cursor:pointer;transition:all .2s;margin-right:4px;}
+    .btn-sm:hover{border-color:var(--accent2);color:var(--accent2);}
+    .btn-sm.danger:hover{border-color:var(--warn);color:var(--warn);}
+
+    /* Modal */
+    .modal{display:none;position:fixed;inset:0;z-index:200;
+      background:rgba(5,10,14,.88);backdrop-filter:blur(6px);align-items:center;justify-content:center;}
+    .modal.open{display:flex;}
+    .modal-box{background:var(--surface);border:1px solid var(--border);width:520px;position:relative;}
+    .modal-box::before{content:'';position:absolute;top:-1px;left:-1px;
+      width:14px;height:14px;border-top:2px solid var(--accent2);border-left:2px solid var(--accent2);}
+    .modal-box::after{content:'';position:absolute;bottom:-1px;right:-1px;
+      width:14px;height:14px;border-bottom:2px solid var(--accent);border-right:2px solid var(--accent);}
+    .modal-head{display:flex;justify-content:space-between;align-items:center;
+      padding:18px 24px;border-bottom:1px solid var(--border);}
+    .modal-head h3{font-family:var(--font-display);font-weight:700;font-size:.9rem;}
+    .modal-close{background:none;border:none;color:var(--muted);font-size:1.2rem;cursor:pointer;}
+    .modal-close:hover{color:var(--warn);}
+    .modal-body{padding:24px;}
+    .form-group{margin-bottom:16px;}
+    label{display:block;font-size:.65rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);margin-bottom:7px;}
+    input[type=text],input[type=number],select,input[type=password]{
+      width:100%;background:#070f15;border:1px solid var(--border);
+      color:var(--text);font-family:var(--font-mono);font-size:.85rem;
+      padding:10px 12px;outline:none;transition:border-color .2s;
+    }
+    input:focus,select:focus{border-color:var(--accent2);}
+    .form-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+    .btn-submit{
+      width:100%;background:transparent;border:1px solid var(--accent2);color:var(--accent2);
+      font-family:var(--font-display);font-weight:700;font-size:.82rem;letter-spacing:.18em;
+      text-transform:uppercase;padding:13px;cursor:pointer;margin-top:8px;transition:all .25s;
+      position:relative;overflow:hidden;
+    }
+    .btn-submit::before{content:'';position:absolute;inset:0;background:var(--accent2);
+      transform:translateX(-100%);transition:.25s;z-index:0;}
+    .btn-submit:hover::before{transform:translateX(0);}
+    .btn-submit:hover{color:var(--bg);}
+    .btn-submit span{position:relative;z-index:1;}
+
+    /* Floor map editor */
+    .floor-editor{display:grid;grid-template-columns:1fr 320px;gap:24px;}
+    .map-canvas-wrap{background:#070f15;border:1px solid var(--border);padding:16px;}
+    .map-canvas{border:1px solid var(--border);width:100%;height:320px;cursor:crosshair;}
+    .floor-selector{display:flex;gap:8px;margin-bottom:16px;}
+    .floor-btn{background:#070f15;border:1px solid var(--border);color:var(--muted);
+      font-family:var(--font-mono);font-size:.7rem;padding:7px 16px;cursor:pointer;transition:all .2s;}
+    .floor-btn.active{border-color:var(--accent2);color:var(--accent2);background:rgba(0,255,157,0.07);}
+    .ap-overlay-list{font-size:.72rem;}
+    .ap-overlay-item{display:flex;justify-content:space-between;align-items:center;
+      padding:10px 12px;border-bottom:1px solid rgba(26,58,74,.5);}
+    .ap-overlay-item:last-child{border-bottom:none;}
+    .toast{
+      position:fixed;bottom:24px;right:24px;background:rgba(0,255,157,.15);
+      border:1px solid var(--accent2);color:var(--accent2);
+      padding:12px 20px;font-size:.75rem;z-index:300;
+      transform:translateY(60px);opacity:0;transition:all .3s;
+    }
+    .toast.show{transform:translateY(0);opacity:1;}
+  </style>
+</head>
+<body>
+<div class="topbar">
+  <div class="topbar-brand">Z-TRACES</div>
+  <div style="display:flex;align-items:center;gap:16px;font-size:.75rem;color:var(--muted)">
+    <span class="badge">SYSTEM OPERATOR</span>
+    <span id="opName">Operator</span>
+    <button class="btn-logout" onclick="logout()">Logout</button>
+  </div>
+</div>
+
+<div class="tabs">
+  <div class="tab active" onclick="switchTab('aps',this)">Wi-Fi Access Points</div>
+  <div class="tab" onclick="switchTab('floors',this)">Floor Mapping</div>
+  <div class="tab" onclick="switchTab('fingerprints',this)">Fingerprint DB</div>
+</div>
+
+<!-- TAB: Access Points -->
+<div class="tab-content active" id="tab-aps">
+  <div class="sec-head"><h2>Wi-Fi Access Point Management</h2></div>
+
+  <div class="action-bar">
+    <input type="text" id="apSearch" placeholder="Search SSID or BSSID..." style="flex:1" oninput="filterAPs()"/>
+    <select id="apFloorFilter" onchange="filterAPs()">
+      <option value="">All Floors</option>
+      <option>1</option><option>2</option><option>3</option>
+    </select>
+    <button class="btn-add" onclick="openAPModal()">+ Add Access Point</button>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Status</th><th>BSSID</th><th>SSID</th><th>Floor</th><th>Location Label</th><th>Signal (RSSI)</th><th>Actions</th>
+      </tr>
+    </thead>
+    <tbody id="apTbody"></tbody>
+  </table>
+</div>
+
+<!-- TAB: Floor Mapping -->
+<div class="tab-content" id="tab-floors">
+  <div class="sec-head"><h2>Floor Map Management</h2></div>
+
+  <div class="floor-selector" id="floorSelector"></div>
+
+  <div class="floor-editor">
+    <div class="map-canvas-wrap">
+      <canvas class="map-canvas" id="mapCanvas" width="560" height="320"></canvas>
+      <div style="font-size:.65rem;color:var(--muted);margin-top:8px;">
+        Click on canvas to place/move an AP marker for selected floor.
+      </div>
+    </div>
+    <div style="background:var(--surface);border:1px solid var(--border);padding:16px;">
+      <div style="font-size:.65rem;letter-spacing:.18em;text-transform:uppercase;color:var(--accent2);margin-bottom:14px;">
+        APs on this floor
+      </div>
+      <div class="ap-overlay-list" id="apOverlayList"></div>
+      <div style="margin-top:20px;">
+        <button class="btn-add" style="width:100%" onclick="saveFloorMapping()">Save Floor Mapping</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- TAB: Fingerprints -->
+<div class="tab-content" id="tab-fingerprints">
+  <div class="sec-head"><h2>Fingerprint Database</h2></div>
+  <div class="action-bar">
+    <input type="text" id="fpSearch" placeholder="Search area or BSSID..." style="flex:1" oninput="filterFPs()"/>
+    <button class="btn-add" onclick="openFPModal()">+ Add Fingerprint</button>
+  </div>
+  <table>
+    <thead>
+      <tr><th>ID</th><th>BSSID</th><th>RSSI</th><th>Floor</th><th>Area</th><th>Actions</th></tr>
+    </thead>
+    <tbody id="fpTbody"></tbody>
+  </table>
+</div>
+
+<!-- Modal: Add/Edit AP -->
+<div class="modal" id="apModal">
+  <div class="modal-box">
+    <div class="modal-head">
+      <h3 id="apModalTitle">Register Access Point</h3>
+      <button class="modal-close" onclick="closeModal('apModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="apEditId"/>
+      <div class="form-row">
+        <div class="form-group">
+          <label>BSSID (MAC Address)</label>
+          <input type="text" id="apBssid" placeholder="AA:BB:CC:DD:EE:FF"/>
+        </div>
+        <div class="form-group">
+          <label>SSID (Network Name)</label>
+          <input type="text" id="apSsid" placeholder="CampusNet-5G"/>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Floor Number</label>
+          <select id="apFloor"><option>1</option><option>2</option><option>3</option></select>
+        </div>
+        <div class="form-group">
+          <label>RSSI (dBm)</label>
+          <input type="number" id="apRssi" placeholder="-55" min="-100" max="0"/>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Location Label / Area</label>
+        <input type="text" id="apLabel" placeholder="LAB-101, LOBBY, etc."/>
+      </div>
+      <div class="form-group">
+        <label>Status</label>
+        <select id="apStatus"><option value="active">Active</option><option value="inactive">Inactive</option></select>
+      </div>
+      <button class="btn-submit" onclick="saveAP()"><span>Save Access Point</span></button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Add Fingerprint -->
+<div class="modal" id="fpModal">
+  <div class="modal-box">
+    <div class="modal-head">
+      <h3>Add Fingerprint Record</h3>
+      <button class="modal-close" onclick="closeModal('fpModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>BSSID (Access Point)</label>
+        <select id="fpBssid" style="width:100%;background:#070f15;border:1px solid var(--border);color:var(--text);font-family:var(--font-mono);font-size:.8rem;padding:10px;outline:none;"></select>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>RSSI Value</label>
+          <input type="number" id="fpRssi" placeholder="-60"/>
+        </div>
+        <div class="form-group">
+          <label>Floor</label>
+          <select id="fpFloor"><option>1</option><option>2</option><option>3</option></select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Area Label</label>
+        <input type="text" id="fpArea" placeholder="LAB-101"/>
+      </div>
+      <button class="btn-submit" onclick="saveFP()"><span>Save Fingerprint</span></button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  const API = '';
+  const token = () => localStorage.getItem('zt_token') || '';
+  const hdrs  = () => ({ 'Content-Type':'application/json', 'Authorization':'Bearer '+token() });
+
+  const opUser = JSON.parse(localStorage.getItem('zt_user')||'{}');
+  document.getElementById('opName').textContent = opUser.name || 'Operator';
+  function logout(){ localStorage.clear(); window.location.href='index.html'; }
+
+  function switchTab(id,el){
+    document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));
+    el.classList.add('active');
+    document.getElementById('tab-'+id).classList.add('active');
+    if(id==='aps') loadAPs();
+    if(id==='floors') loadAPs().then(()=>initFloorSelector());
+    if(id==='fingerprints') { loadAPs(); loadFPs(); }
+  }
