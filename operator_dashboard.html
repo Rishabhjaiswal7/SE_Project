@@ -306,3 +306,151 @@
     if(id==='floors') loadAPs().then(()=>initFloorSelector());
     if(id==='fingerprints') { loadAPs(); loadFPs(); }
   }
+ // ─── State ───────────────────────────────────────────────
+  let APs = [], filteredAPs = [];
+  let FPs = [], filteredFPs = [];
+  let currentFloor = 1;
+  let apPositions  = { 1:{}, 2:{}, 3:{} };
+  let dragging = null;
+
+  // ─── Toast ───────────────────────────────────────────────
+  function toast(msg, isError=false){
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.style.background  = isError ? 'rgba(255,107,53,.15)' : 'rgba(0,255,157,.15)';
+    t.style.borderColor = isError ? 'var(--warn)'          : 'var(--accent2)';
+    t.style.color       = isError ? 'var(--warn)'          : 'var(--accent2)';
+    t.classList.add('show');
+    setTimeout(()=>t.classList.remove('show'), 3000);
+  }
+  function openModal(id){ document.getElementById(id).classList.add('open'); }
+  function closeModal(id){ document.getElementById(id).classList.remove('open'); }
+  function setLoading(tbodyId, cols){
+    document.getElementById(tbodyId).innerHTML =
+      `<tr><td colspan="${cols}" style="text-align:center;padding:20px;color:var(--muted);font-size:.75rem;">Loading from database...</td></tr>`;
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  //  ACCESS POINTS — Real API
+  // ═══════════════════════════════════════════════════════════
+
+  async function loadAPs(){
+    setLoading('apTbody', 7);
+    try {
+      const res  = await fetch(API+'/api/access-points', { headers: hdrs() });
+      if(!res.ok) throw new Error('HTTP '+res.status);
+      const data = await res.json();
+      APs = data.map(a => ({
+        id:     a._id || a.id,
+        bssid:  a.bssid,
+        ssid:   a.ssid,
+        floor:  Number(a.floor),
+        label:  a.label || '',
+        rssi:   Number(a.rssi) || -70,
+        status: a.status || 'active'
+      }));
+      filteredAPs = [...APs];
+      renderAPs();
+    } catch(e) {
+      document.getElementById('apTbody').innerHTML =
+        `<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--warn);font-size:.75rem;">
+          ⚠ Backend connect nahi ho raha (${e.message})<br>
+          <span style="color:var(--muted)">Flask server chala raha hai? → python app.py</span>
+        </td></tr>`;
+    }
+    return APs;
+  }
+
+  function filterAPs(){
+    const q  = document.getElementById('apSearch').value.toLowerCase();
+    const fl = document.getElementById('apFloorFilter').value;
+    filteredAPs = APs.filter(a =>
+      (!q  || a.bssid.toLowerCase().includes(q) || a.ssid.toLowerCase().includes(q) || a.label.toLowerCase().includes(q)) &&
+      (!fl || a.floor == fl)
+    );
+    renderAPs();
+  }
+
+  function renderAPs(){
+    if(!filteredAPs.length){
+      document.getElementById('apTbody').innerHTML =
+        `<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--muted);font-size:.75rem;">
+          Koi AP nahi mili. "Add Access Point" se naya AP register karo.
+        </td></tr>`;
+      return;
+    }
+    document.getElementById('apTbody').innerHTML = filteredAPs.map(a=>`
+      <tr>
+        <td><span class="status-dot ${a.status==='active'?'on':'off'}"></span>${a.status}</td>
+        <td style="color:var(--accent);font-size:.72rem">${a.bssid}</td>
+        <td>${a.ssid}</td>
+        <td style="color:var(--accent2)">Floor ${a.floor}</td>
+        <td style="color:var(--muted)">${a.label}</td>
+        <td style="color:${a.rssi>-60?'var(--accent2)':'var(--warn)'}">${a.rssi} dBm</td>
+        <td>
+          <button class="btn-sm" onclick="editAP('${a.id}')">Edit</button>
+          <button class="btn-sm danger" onclick="deleteAP('${a.id}')">Delete</button>
+        </td>
+      </tr>`).join('');
+  }
+
+  function openAPModal(id=null){
+    document.getElementById('apEditId').value = id || '';
+    document.getElementById('apModalTitle').textContent = id ? 'Edit Access Point' : 'Register Access Point';
+    if(id){
+      const ap = APs.find(a=>a.id===id);
+      if(!ap) return;
+      document.getElementById('apBssid').value  = ap.bssid;
+      document.getElementById('apSsid').value   = ap.ssid;
+      document.getElementById('apFloor').value  = ap.floor;
+      document.getElementById('apRssi').value   = ap.rssi;
+      document.getElementById('apLabel').value  = ap.label;
+      document.getElementById('apStatus').value = ap.status;
+      document.getElementById('apBssid').readOnly = true;
+    } else {
+      ['apBssid','apSsid','apRssi','apLabel'].forEach(i=>document.getElementById(i).value='');
+      document.getElementById('apBssid').readOnly = false;
+      document.getElementById('apFloor').value  = '1';
+      document.getElementById('apStatus').value = 'active';
+    }
+    openModal('apModal');
+  }
+  function editAP(id){ openAPModal(id); }
+
+  async function deleteAP(id){
+    if(!confirm('Is AP ko delete karna chahte ho?')) return;
+    try {
+      const res = await fetch(API+'/api/access-points/'+id, { method:'DELETE', headers: hdrs() });
+      if(!res.ok) throw new Error((await res.json()).error || res.status);
+      toast('AP delete ho gaya.');
+      loadAPs();
+    } catch(e){ toast('Delete failed: '+e.message, true); }
+  }
+
+  async function saveAP(){
+    const editId = document.getElementById('apEditId').value;
+    const bssid  = document.getElementById('apBssid').value.trim().toUpperCase();
+    const ssid   = document.getElementById('apSsid').value.trim();
+    const floor  = parseInt(document.getElementById('apFloor').value);
+    const rssi   = parseInt(document.getElementById('apRssi').value) || -70;
+    const label  = document.getElementById('apLabel').value.trim();
+    const status = document.getElementById('apStatus').value;
+
+    if(!bssid || !ssid){ toast('BSSID aur SSID required hai!', true); return; }
+    if(!/^([0-9A-F]{2}:){5}[0-9A-F]{2}$/.test(bssid)){
+      toast('BSSID format galat! Example: AA:BB:CC:11:22:33', true); return;
+    }
+
+    try {
+      const res = await fetch(API+'/api/access-points'+(editId?'/'+editId:''), {
+        method: editId ? 'PUT' : 'POST',
+        headers: hdrs(),
+        body: JSON.stringify({ bssid, ssid, floor, rssi, label, status })
+      });
+      const data = await res.json();
+      if(!res.ok) throw new Error(data.error || res.status);
+      closeModal('apModal');
+      toast(editId ? 'AP update ho gaya!' : 'Naya AP register ho gaya!');
+      await loadAPs();
+    } catch(e){ toast('Save failed: '+e.message, true); }
+  }
