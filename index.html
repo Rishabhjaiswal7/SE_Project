@@ -209,3 +209,36 @@
       errEl.classList.add('show');
       return;
     }
+
+    try {
+      const res  = await fetch('/api/login', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ username, password, role: selectedRole })
+      });
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        localStorage.setItem('zt_token', data.token);
+        localStorage.setItem('zt_role',  data.role);
+        localStorage.setItem('zt_user',  JSON.stringify(data.user));
+        const redirectMap = {
+          admin:    'admin_dashboard.html',
+          operator: 'operator_dashboard.html',
+          user:     'user_dashboard.html'
+        };
+        window.location.href = redirectMap[data.role] || 'user_dashboard.html';
+      } else {
+        errEl.textContent = data.message || 'Invalid credentials.';
+        errEl.classList.add('show');
+      }
+    } catch (e) {
+      errEl.textContent = 'Server not running. Please start backend — run start.bat or python app.py';
+      errEl.classList.add('show');
+    }
+  }
+
+  document.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+</script>
+</body>
+</html>
