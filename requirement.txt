@@ -5,3 +5,4 @@ accelerate
 safetensors
 Pillow
 gradio
+flask-limiter
