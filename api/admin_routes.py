@@ -71,3 +71,66 @@ def admin_list_users():
         ]
     users = list(users_col.find(query, {"password_hash": 0}).limit(100))
     return jsonify(serialize(users))
+@bp.route("/api/admin/location-history", methods=["GET"])
+@require_auth(roles=["admin"])
+def admin_location_history():
+    floor_filter  = request.args.get("floor")
+    user_filter   = request.args.get("user_id")
+    limit = int(request.args.get("limit", 100))
+
+    user_ids = [u["_id"] for u in users_col.find({"role": "user"}, {"_id": 1})]
+    query = {"user_id": {"$in": user_ids}}
+    
+    if floor_filter:
+        query["floor"] = int(floor_filter)
+    if user_filter:
+        try:
+            query["user_id"] = ObjectId(user_filter)
+        except Exception:
+            pass
+
+    records = list(locations_col.find(query).sort("timestamp", -1).limit(limit))
+    for r in records:
+        u = users_col.find_one({"_id": r["user_id"]}, {"name": 1})
+        r["user_name"] = u["name"] if u else "Unknown"
+
+    return jsonify(serialize(records))
+
+@bp.route("/api/admin/live-users", methods=["GET"])
+@require_auth(["admin"])
+def get_live_users():
+    users = list(users_col.find({"role": "user"}))
+    user_map = {u["_id"]: u for u in users}
+
+    if not user_map:
+        return jsonify([])
+
+    pipeline = [
+        {"$match": {"user_id": {"$in": list(user_map.keys())}}},
+        {"$sort": {"timestamp": -1}},
+        {"$group": {
+            "_id": "$user_id",
+            "floor": {"$first": "$floor"},
+            "x": {"$first": "$x"},
+            "y": {"$first": "$y"},
+            "area": {"$first": "$area"},
+            "timestamp": {"$first": "$timestamp"}
+        }}
+    ]
+    latest_locs = list(locations_col.aggregate(pipeline))
+
+    result = []
+    for loc in latest_locs:
+        u = user_map.get(loc["_id"])
+        if u:
+            result.append({
+                "name": u["name"],
+                "user_id": str(u["_id"]),
+                "floor": loc.get("floor"),
+                "x": loc.get("x"),
+                "y": loc.get("y"),
+                "area": loc.get("area"),
+                "timestamp": loc.get("timestamp")
+            })
+
+    return jsonify(serialize(result))
