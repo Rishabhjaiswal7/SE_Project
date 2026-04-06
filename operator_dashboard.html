@@ -609,5 +609,45 @@
       }
     } catch(e){ toast('Save failed: '+e.message, true); }
   }
+ // ═══════════════════════════════════════════════════════════
+  //  FINGERPRINTS — Real API
+  // ═══════════════════════════════════════════════════════════
 
+  async function loadFPs(){
+    setLoading('fpTbody', 6);
+    try {
+      const res  = await fetch(API+'/api/fingerprints', { headers: hdrs() });
+      if(!res.ok) throw new Error('HTTP '+res.status);
+      const data = await res.json();
+      FPs = data.map(f=>({
+        id:    f._id || f.id,
+        bssid: f.bssid,
+        rssi:  Number(f.rssi),
+        floor: Number(f.floor),
+        area:  f.area || '',
+        x:     f.x,
+        y:     f.y
+      }));
+      filteredFPs = [...FPs];
+      renderFPs();
+    } catch(e){
+      document.getElementById('fpTbody').innerHTML =
+        `<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--warn);font-size:.75rem;">⚠ ${e.message}</td></tr>`;
+    }
+  }
+
+  function filterFPs(){
+    const q = document.getElementById('fpSearch').value.toLowerCase();
+    filteredFPs = FPs.filter(f=>
+      f.bssid.toLowerCase().includes(q) || (f.area||'').toLowerCase().includes(q)
+    );
+    renderFPs();
+  }
+
+
+  // ─── Init ─────────────────────────────────────────────────
+  loadAPs();
+</script>
+</body>
+</html>
  
