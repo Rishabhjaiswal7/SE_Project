@@ -644,7 +644,45 @@
     renderFPs();
   }
 
+  function renderFPs(){
+    if(!filteredFPs.length){
+      document.getElementById('fpTbody').innerHTML =
+        `<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--muted);font-size:.75rem;">
+          Koi fingerprint nahi. Pehle APs add karo, phir "Add Fingerprint" karo.
+        </td></tr>`;
+      return;
+    }
+    document.getElementById('fpTbody').innerHTML = filteredFPs.map(f=>`
+      <tr>
+        <td style="color:var(--muted);font-size:.65rem">${String(f.id||'').slice(-8)}</td>
+        <td style="color:var(--accent);font-size:.72rem">${f.bssid}</td>
+        <td style="color:${f.rssi>-60?'var(--accent2)':'var(--warn)'}">${f.rssi} dBm</td>
+        <td style="color:var(--accent2)">Floor ${f.floor}</td>
+        <td>${f.area||'—'}</td>
+        <td><button class="btn-sm danger" onclick="deleteFP('${f.id}')">Delete</button></td>
+      </tr>`).join('');
+  }
 
+  async function deleteFP(id){
+    if(!confirm('Is fingerprint ko delete karna chahte ho?')) return;
+    try {
+      await fetch(API+'/api/fingerprints/'+id, { method:'DELETE', headers: hdrs() });
+      toast('Fingerprint delete ho gaya.');
+      loadFPs();
+    } catch(e){ toast('Delete failed: '+e.message, true); }
+  }
+
+  function openFPModal(){
+    if(!APs.length){ toast('Pehle koi AP add karo!', true); return; }
+    const sel = document.getElementById('fpBssid');
+    sel.innerHTML = APs.map(a=>
+      `<option value="${a.bssid}">${a.bssid} — ${a.ssid} (Floor ${a.floor}, ${a.label||'no label'})</option>`
+    ).join('');
+    document.getElementById('fpRssi').value  = '';
+    document.getElementById('fpArea').value  = '';
+    document.getElementById('fpFloor').value = '1';
+    // Auto-sync floor when BSSID changes
+    
   // ─── Init ─────────────────────────────────────────────────
   loadAPs();
 </script>
