@@ -455,3 +455,159 @@
       await loadAPs();
     } catch(e){ toast('Save failed: '+e.message, true); }
   }
+
+  // ═══════════════════════════════════════════════════════════
+  //  FLOOR MAP — AP positions
+  // ═══════════════════════════════════════════════════════════
+
+  function initFloorSelector(){
+    document.getElementById('floorSelector').innerHTML = [1,2,3].map(f=>
+      `<button class="floor-btn ${f===currentFloor?'active':''}" onclick="selectFloor(${f},this)">Floor ${f}</button>`
+    ).join('');
+    renderCanvas();
+  }
+
+  function selectFloor(f, el){
+    currentFloor = f;
+    document.querySelectorAll('.floor-btn').forEach(b=>b.classList.remove('active'));
+    el.classList.add('active');
+    renderCanvas();
+  }
+
+  function renderCanvas(){
+    const canvas = document.getElementById('mapCanvas');
+    const ctx    = canvas.getContext('2d');
+    const W = canvas.width, H = canvas.height;
+    ctx.clearRect(0, 0, W, H);
+
+    // Grid
+    ctx.strokeStyle='rgba(26,58,74,.5)'; ctx.lineWidth=1;
+    for(let x=0;x<W;x+=40){ ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke(); }
+    for(let y=0;y<H;y+=40){ ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke(); }
+
+    // Building outline
+    ctx.strokeStyle='#1a3a4a'; ctx.lineWidth=1.5;
+    ctx.strokeRect(20,20,W-40,H-40);
+    ctx.strokeRect(20,20,(W-40)/2,130); ctx.strokeRect(300,20,(W-40)/2,130);
+    ctx.strokeRect(20,150,W-40,H-170);
+
+    // Coordinate guides
+    ctx.fillStyle='rgba(74,122,138,0.4)'; ctx.font='9px monospace';
+    for(let x=0;x<W;x+=80) ctx.fillText(x,x+2,12);
+    for(let y=0;y<H;y+=80) ctx.fillText(y,2,y+10);
+
+    ctx.fillStyle='rgba(26,58,74,0.7)'; ctx.font='10px monospace';
+    ctx.fillText('FLOOR '+currentFloor, W-72, H-8);
+    ctx.fillStyle='rgba(74,122,138,0.5)'; ctx.font='9px monospace';
+    ctx.fillText('Click = AP place karo | Drag = move karo', 22, H-8);
+
+    // APs on this floor
+    const floorAPs = APs.filter(a => a.floor === currentFloor);
+    const positions = apPositions[currentFloor] || {};
+    const placed    = new Set(Object.keys(positions));
+
+    floorAPs.forEach((ap, i) => {
+      const pos = positions[ap.bssid] || null;
+      if(!pos) return; // Not placed yet — show in list as 'not placed'
+
+      // Glowing ring
+      ctx.beginPath(); ctx.arc(pos.x, pos.y, 16, 0, Math.PI*2);
+      ctx.fillStyle='rgba(0,212,255,0.07)'; ctx.fill();
+      ctx.strokeStyle='#00d4ff'; ctx.lineWidth=1.2; ctx.stroke();
+
+      // Inner dot
+      ctx.beginPath(); ctx.arc(pos.x, pos.y, 5, 0, Math.PI*2);
+      ctx.fillStyle='#00d4ff'; ctx.fill();
+
+      // Label box
+      ctx.fillStyle='rgba(13,27,36,0.85)';
+      const lw = Math.max(ap.label.length, ap.ssid.length)*6+8;
+      ctx.fillRect(pos.x+20, pos.y-10, lw, 26);
+      ctx.strokeStyle='rgba(0,212,255,0.3)'; ctx.lineWidth=1;
+      ctx.strokeRect(pos.x+20, pos.y-10, lw, 26);
+
+      ctx.fillStyle='#cce8f0'; ctx.font='bold 9px monospace';
+      ctx.fillText(ap.label||ap.ssid, pos.x+24, pos.y+3);
+      ctx.fillStyle='#4a7a8a'; ctx.font='8px monospace';
+      ctx.fillText(ap.bssid, pos.x+24, pos.y+13);
+    });
+
+    // Overlay list (sidebar)
+    document.getElementById('apOverlayList').innerHTML = floorAPs.length
+      ? floorAPs.map(ap => {
+          const pos = positions[ap.bssid];
+          return `<div class="ap-overlay-item">
+            <div>
+              <div style="color:var(--accent);font-size:.7rem">${ap.bssid}</div>
+              <div style="color:var(--muted);font-size:.62rem">${ap.label||ap.ssid}</div>
+            </div>
+            ${pos
+              ? `<span style="color:var(--accent2);font-size:.62rem">(${Math.round(pos.x)}, ${Math.round(pos.y)})</span>`
+              : `<span style="color:var(--warn);font-size:.62rem">click to place</span>`
+            }
+          </div>`;
+        }).join('')
+      : '<div style="color:var(--muted);font-size:.72rem;padding:12px 0">Is floor pe koi AP nahi hai.</div>';
+  }
+
+  // Canvas drag/click events
+  const canvas = document.getElementById('mapCanvas');
+
+  function canvasCoords(e){
+    const rect = canvas.getBoundingClientRect();
+    return {
+      x: (e.clientX - rect.left) * (canvas.width  / rect.width),
+      y: (e.clientY - rect.top)  * (canvas.height / rect.height)
+    };
+  }
+
+  canvas.addEventListener('mousedown', e=>{
+    const {x,y} = canvasCoords(e);
+    const floorAPs  = APs.filter(a=>a.floor===currentFloor);
+    const positions = apPositions[currentFloor] || {};
+
+    // Check drag on existing placed AP
+    for(const ap of floorAPs){
+      const p = positions[ap.bssid];
+      if(p && Math.hypot(x-p.x, y-p.y) < 18){ dragging = ap.bssid; return; }
+    }
+
+    // Place first unplaced AP
+    const unplaced = floorAPs.find(a=>!positions[a.bssid]);
+    if(unplaced){
+      if(!apPositions[currentFloor]) apPositions[currentFloor] = {};
+      apPositions[currentFloor][unplaced.bssid] = {x, y};
+      renderCanvas();
+    }
+  });
+
+  canvas.addEventListener('mousemove', e=>{
+    if(!dragging) return;
+    const {x,y} = canvasCoords(e);
+    if(!apPositions[currentFloor]) apPositions[currentFloor] = {};
+    apPositions[currentFloor][dragging] = {x, y};
+    renderCanvas();
+  });
+
+  canvas.addEventListener('mouseup',   ()=>{ dragging = null; });
+  canvas.addEventListener('mouseleave',()=>{ dragging = null; });
+
+  async function saveFloorMapping(){
+    const positions = apPositions[currentFloor] || {};
+    const posArray  = Object.entries(positions).map(([bssid,p])=>({
+      bssid, x: Math.round(p.x), y: Math.round(p.y)
+    }));
+    try {
+      await fetch(API+'/api/floor-mapping', {
+        method:'POST', headers: hdrs(),
+        body: JSON.stringify({ floor: currentFloor, positions: posArray })
+      });
+      toast(`Floor ${currentFloor} ka mapping save ho gaya!`);
+      // Update fingerprint coords too
+      for(const pos of posArray){
+        // backend already handles this in /api/floor-mapping
+      }
+    } catch(e){ toast('Save failed: '+e.message, true); }
+  }
+
+ 
