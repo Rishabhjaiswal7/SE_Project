@@ -49,3 +49,58 @@ def create_ap():
     result = access_points_col.insert_one(doc)
     log.info(f"Created new access point {data['bssid']}")
     return jsonify({"success": True, "id": str(result.inserted_id)}), 201
+
+@bp.route("/api/access-points/<ap_id>", methods=["PUT"])
+@require_auth(roles=["operator", "admin"])
+def update_ap(ap_id):
+    data = request.get_json()
+    update_fields = {k: data[k] for k in ["ssid", "floor", "label", "rssi", "status"] if k in data}
+    if "floor" in update_fields:
+        update_fields["floor"] = int(update_fields["floor"])
+    if "rssi" in update_fields:
+        update_fields["rssi"] = int(update_fields["rssi"])
+    access_points_col.update_one({"_id": ObjectId(ap_id)}, {"$set": update_fields})
+    return jsonify({"success": True})
+
+@bp.route("/api/access-points/<ap_id>", methods=["DELETE"])
+@require_auth(roles=["operator", "admin"])
+def delete_ap(ap_id):
+    access_points_col.delete_one({"_id": ObjectId(ap_id)})
+    return jsonify({"success": True})
+
+@bp.route("/api/fingerprints", methods=["GET"])
+@require_auth()
+def list_fingerprints():
+    floor_filter = request.args.get("floor")
+    query = {}
+    if floor_filter:
+        query["floor"] = int(floor_filter)
+    fps = list(fingerprints_col.find(query).limit(500))
+    return jsonify(serialize(fps))
+
+@bp.route("/api/fingerprints", methods=["POST"])
+@require_auth(roles=["operator", "admin"])
+def create_fingerprint():
+    data = request.get_json()
+    required = ["bssid", "rssi", "floor"]
+    if not all(k in data for k in required):
+        return jsonify({"error": f"Required fields: {required}", "code": 400}), 400
+    ap = access_points_col.find_one({"bssid": data["bssid"]})
+    if not ap:
+        return jsonify({"error": "BSSID not found in access points", "code": 404}), 404
+        
+    if not MAC_REGEX.match(data["bssid"]):
+        return jsonify({"error": "Invalid BSSID format", "code": 400}), 400
+
+    doc = {
+        "bssid":  data["bssid"].upper(),
+        "rssi":   int(data["rssi"]),
+        "floor":  int(data["floor"]),
+        "area":   data.get("area", ""),
+        "x":      int(data.get("x", 300)),
+        "y":      int(data.get("y", 120)),
+        "created_at": datetime.utcnow()
+    }
+    result = fingerprints_col.insert_one(doc)
+    log.info(f"Recorded new fingerprint at x:{doc['x']} y:{doc['y']}")
+    return jsonify({"success": True, "id": str(result.inserted_id)}), 201
