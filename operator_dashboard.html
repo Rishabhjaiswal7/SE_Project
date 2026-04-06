@@ -682,7 +682,44 @@
     document.getElementById('fpArea').value  = '';
     document.getElementById('fpFloor').value = '1';
     // Auto-sync floor when BSSID changes
-    
+    sel.onchange = ()=>{
+      const ap = APs.find(a=>a.bssid===sel.value);
+      if(ap) document.getElementById('fpFloor').value = ap.floor;
+    };
+    openModal('fpModal');
+  }
+
+  async function saveFP(){
+    const bssid = document.getElementById('fpBssid').value;
+    const rssi  = parseInt(document.getElementById('fpRssi').value);
+    const floor = parseInt(document.getElementById('fpFloor').value);
+    const area  = document.getElementById('fpArea').value.trim();
+
+    if(!bssid){ toast('BSSID select karo!', true); return; }
+    if(isNaN(rssi) || rssi > 0 || rssi < -120){
+      toast('RSSI -1 se -120 ke beech hona chahiye. Example: -65', true); return;
+    }
+    if(!area){ toast('Area name required hai! Example: LAB-101', true); return; }
+
+    // Auto x,y from floor map positions
+    const pos = (apPositions[floor]||{})[bssid];
+    const payload = { bssid, rssi, floor, area,
+      x: pos ? Math.round(pos.x) : 300,
+      y: pos ? Math.round(pos.y) : 160
+    };
+
+    try {
+      const res  = await fetch(API+'/api/fingerprints', {
+        method:'POST', headers: hdrs(), body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if(!res.ok) throw new Error(data.error || res.status);
+      closeModal('fpModal');
+      toast('Fingerprint database mein save ho gaya! KNN ab is data use karega.');
+      loadFPs();
+    } catch(e){ toast('Save failed: '+e.message, true); }
+  }
+
   // ─── Init ─────────────────────────────────────────────────
   loadAPs();
 </script>
