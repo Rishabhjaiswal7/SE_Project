@@ -328,3 +328,242 @@
       <div style="color:var(--muted);font-size:.75rem;padding:16px;">Click "Scan & Locate" to detect signals.</div>
     </div>
   </div>
+
+
+</div>
+
+<script>
+  // Auth check
+  const user = JSON.parse(localStorage.getItem('zt_user') || '{}');
+  document.getElementById('userName').textContent = user.name || 'User';
+
+  function logout() {
+    localStorage.clear();
+    window.location.href = 'index.html';
+  }
+
+  const AGENT_URL = 'http://localhost:5001';
+  const AREAS = ['LAB-101','LAB-102','CONF-A','STAFF','LIBRARY','LOBBY','CAFETERIA'];
+
+  // Fallback mock signals (agent nahi chala ho tab)
+  const MOCK_SIGNALS = [
+    {ssid:'CampusNet-5G', bssid:'AA:BB:CC:11:22:33', rssi:-42},
+    {ssid:'CampusNet-2G', bssid:'AA:BB:CC:44:55:66', rssi:-58},
+    {ssid:'LibraryWiFi',  bssid:'DD:EE:FF:77:88:99', rssi:-71},
+    {ssid:'Admin-Net',    bssid:'11:22:33:AA:BB:CC', rssi:-82},
+  ];
+
+  // ── Agent status check on page load ──
+  let agentAvailable = false;
+  async function checkAgent() {
+    try {
+      const res = await fetch(AGENT_URL + '/health', {signal: AbortSignal.timeout(1500)});
+      const data = await res.json();
+      if (data.status === 'ok') {
+        agentAvailable = true;
+        setAgentStatus(true, data.os);
+      }
+    } catch {
+      agentAvailable = false;
+      setAgentStatus(false);
+    }
+  }
+
+  function setAgentStatus(online, os='') {
+    const dot  = document.getElementById('agentDot');
+    const text = document.getElementById('agentText');
+    if (online) {
+      dot.style.background  = 'var(--accent2)';
+      dot.style.boxShadow   = '0 0 6px var(--accent2)';
+      text.textContent = `Agent Online (${os}) — Real Wi-Fi scanning active`;
+      text.style.color = 'var(--accent2)';
+    } else {
+      dot.style.background  = 'var(--warn)';
+      dot.style.boxShadow   = '0 0 6px var(--warn)';
+      text.textContent = 'Agent Offline — Using mock signals | Run: python wifi_agent.py';
+      text.style.color = 'var(--warn)';
+    }
+  }
+
+  checkAgent();
+
+  // ── Real Wi-Fi scan from Agent ──
+  async function getRealSignals() {
+    const res = await fetch(AGENT_URL + '/scan', {signal: AbortSignal.timeout(8000)});
+    const data = await res.json();
+    if (!data.success || !data.signals.length) throw new Error('No signals');
+    return data.signals;
+  }
+
+
+
+  async function localize() {
+    const btn = document.getElementById('locBtn');
+    btn.disabled = true; btn.classList.add('scanning');
+
+    let signals = [];
+    let sourceLabel = '';
+
+    // Step 1: Real signals lene ki koshish
+    try {
+      signals = await getRealSignals();
+      sourceLabel = '🟢 Real Wi-Fi';
+      agentAvailable = true;
+      setAgentStatus(true);
+    } catch {
+      // Agent nahi chala — mock use karo
+      signals = MOCK_SIGNALS.map(s => ({...s, rssi: s.rssi + Math.floor(Math.random()*10 - 5)}));
+      sourceLabel = '🟡 Mock Data';
+      agentAvailable = false;
+      setAgentStatus(false);
+    }
+
+    // Step 2: Signal source label update karo
+    document.getElementById('signalSource').textContent = sourceLabel;
+
+    // Show signals
+    renderSignals(signals);
+
+    try {
+      const res = await fetch('/api/localize', {
+        method:'POST',
+        headers:{'Content-Type':'application/json',
+          'Authorization':'Bearer '+localStorage.getItem('zt_token')},
+        body: JSON.stringify({signals})
+      });
+      const data = await res.json();
+      if (res.ok) showLocation(data, false); // false = already saved by backend
+      else throw new Error();
+    } catch {
+      // Backend nahi chala — mock result use karo aur manually save karo
+      const mockResult = {
+        floor: null,
+        x: null,
+        y: null,
+        area: "Out of Range"
+      };
+      showLocation(mockResult, true); // true = manually save to backend
+    }
+
+    btn.disabled = false; btn.classList.remove('scanning');
+  }
+
+  function showLocation(data, saveToBackend = true) {
+    document.getElementById('chipFloor').textContent = data.floor ? 'Floor ' + data.floor : '—';
+    document.getElementById('chipCoords').textContent = (data.x != null && data.y != null) ? `${data.x}, ${data.y}` : '—';
+    document.getElementById('chipArea').textContent = data.area || '—';
+    document.getElementById('floorLabel').textContent = data.floor ? 'FLOOR: ' + data.floor : 'FLOOR: —';
+
+    // Move ping dot
+    const dot = document.getElementById('pingDot');
+    if (data.x != null && data.y != null) {
+      dot.style.display = 'block';
+      dot.style.left = ((data.x / 600) * 100) + '%';
+      dot.style.top  = ((data.y / 320) * 100) + '%';
+    } else {
+      dot.style.display = 'none';
+    }
+
+    // Only POST to backend manually if /api/localize did NOT already save it
+    if (saveToBackend) {
+      fetch('/api/location-history', {
+        method:'POST',
+        headers:{'Content-Type':'application/json',
+          'Authorization':'Bearer '+localStorage.getItem('zt_token')},
+        body: JSON.stringify({floor: data.floor, x: data.x, y: data.y, area: data.area})
+      }).catch(()=>{});
+    }
+  }
+
+  function getDistance(rssi) {
+    if (rssi > -10) return "—";
+    const txPower = -45; // Approx strength at 1 meter
+    const n = 3.0;       // Path loss exponent for indoor environments
+    const d = Math.pow(10, (txPower - rssi) / (10 * n));
+    return d.toFixed(2) + ' m';
+  }
+
+  function renderSignals(signals) {
+    const el = document.getElementById('signalList');
+    
+    // Core Room 311 Trilateration Access Points
+    const TARGETS = [
+      { bssid: '00:06:AE:C9:D9:A3', label: 'Router B1 (Gate)' },
+      { bssid: '00:06:AE:60:44:AF', label: 'Router B2 (Center)' },
+      { bssid: '00:06:AE:C1:E0:49', label: 'Router B3 (Back)' }
+    ];
+
+    el.innerHTML = TARGETS.map(t => {
+      // Find the signal in the live scan array
+      const match = signals.find(s => s.bssid.toUpperCase() === t.bssid.toUpperCase());
+      const rssi = match ? match.rssi : 0;
+      const isFound = typeof rssi === 'number' && rssi < 0;
+      
+      const pct = isFound ? Math.min(100, Math.max(0, (rssi + 100) * 2)) : 0;
+      const distance = isFound ? getDistance(rssi) : 'Out of range';
+      const rssiLabel = isFound ? rssi + ' dBm' : '—';
+      const opacity = isFound ? '1' : '0.4';
+
+      return `<div class="signal-row" style="opacity: ${opacity}">
+        <div style="flex:1;">
+          <div class="signal-ssid" style="color:var(--accent);font-weight:bold">${t.label}</div>
+          <div class="signal-bssid" style="font-size:0.65rem;margin-top:2px;">${t.bssid}</div>
+        </div>
+        <div style="flex:1;text-align:center;color:var(--muted);font-family:var(--font-mono);font-size:0.75rem;">
+          Dist: <span style="color:var(--text)">${distance}</span>
+        </div>
+        <div class="rssi-bar-wrap" style="width:60px;margin:0 10px;">
+          <div class="rssi-bar" style="width:${pct}%;background:${isFound ? 'linear-gradient(90deg,var(--warn),var(--accent))' : 'var(--muted)'}"></div>
+        </div>
+        <span class="rssi-val">${rssiLabel}</span>
+      </div>`;
+    }).join('');
+  }
+
+
+
+  // ── AUTO HEARTBEAT (every 30s) ──────────────────────────────
+  // Silently scans + sends location to backend so admin sees live data.
+  // No button press needed — runs automatically after login.
+  async function sendHeartbeat() {
+    const token = localStorage.getItem('zt_token');
+    if (!token) return;  // not logged in, skip
+
+    let signals = [];
+    try {
+      // Try real Wi-Fi agent first
+      const res = await fetch(AGENT_URL + '/scan', {signal: AbortSignal.timeout(4000)});
+      const data = await res.json();
+      if (data.success && data.signals.length) {
+        signals = data.signals;
+      }
+    } catch {
+      // Agent offline — use mock signals with slight random variation
+      signals = MOCK_SIGNALS.map(s => ({...s, rssi: s.rssi + Math.floor(Math.random()*8 - 4)}));
+    }
+
+    try {
+      const res = await fetch('/api/user/heartbeat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + token
+        },
+        body: JSON.stringify({ signals })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        // Silently update UI if location changed without full scan animation
+        if (data.location && !document.getElementById('locBtn').disabled) {
+          showLocation(data.location);
+        }
+      }
+    } catch { /* silent fail — backend might be starting up */ }
+  }
+
+  // Send heartbeat immediately on load, then every 30 seconds
+  sendHeartbeat();
+  setInterval(sendHeartbeat, 30000);
+</script>
+</body>
+</html>
