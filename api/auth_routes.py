@@ -70,3 +70,45 @@ def register():
     })
     log.info(f"New user {username} manually registered by admin/operator")
     return jsonify({"success": True, "id": str(result.inserted_id)}), 201
+
+@bp.route("/api/signup", methods=["POST"])
+@limiter.limit("10 per hour")
+def signup():
+    data = request.get_json()
+    username = data.get("username", "").strip().lower()
+    password = data.get("password", "")
+    name     = data.get("name", "")
+    email    = data.get("email", "")
+    role     = data.get("role", "user")
+
+    if not all([username, password, name, email]):
+        return jsonify({"error": "Username, password, name, and email are required", "code": 400}), 400
+    if len(password) < 8 or len(password) > 100:
+        return jsonify({"error": "Password must be 8-100 characters long", "code": 400}), 400
+    if len(username) < 3 or len(username) > 30:
+        return jsonify({"error": "Username must be 3-30 characters long", "code": 400}), 400
+    if role not in ("user", "admin", "operator"):
+        return jsonify({"error": "Invalid role", "code": 400}), 400
+
+    if users_col.find_one({"username": username}):
+        return jsonify({"error": "Username already taken", "code": 409}), 409
+
+    pw_hash = bcrypt.hashpw(password.encode(), bcrypt.gensalt())
+    result  = users_col.insert_one({
+        "username": username,
+        "password_hash": pw_hash,
+        "name": name,
+        "email": email,
+        "role": role,
+        "created_at": datetime.utcnow()
+    })
+    log.info(f"New user {username} signed up publicly as {role}")
+    
+    # Auto-login after signup
+    token = make_token(str(result.inserted_id), role)
+    return jsonify({
+        "success": True,
+        "token": token,
+        "role": role,
+        "user": {"name": name, "email": email, "role": role}
+    }), 201

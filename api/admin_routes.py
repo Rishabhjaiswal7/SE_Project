@@ -38,9 +38,11 @@ def admin_live_locations():
     for uid in user_map.keys():
         # Fetch the single most recent location ping for this specific user
         loc = locations_col.find_one({"user_id": uid}, sort=[("timestamp", -1)])
-        if loc:
+        if not loc:
+            loc = {"_id": uid}
+        else:
             loc["_id"] = uid # Map ID to match previously expected structure
-            latest_locs.append(loc)
+        latest_locs.append(loc)
 
     result = []
     for loc in latest_locs:
@@ -50,10 +52,10 @@ def admin_live_locations():
                 "user_id":   str(u["_id"]),
                 "user_name": u.get("name", u.get("username", "Unknown")),
                 "role":      u.get("role", "user"),
-                "floor":     loc.get("floor", 1),
-                "x":         loc.get("x", 0),
-                "y":         loc.get("y", 0),
-                "area":      loc.get("area", "—"),
+                "floor":     loc.get("floor"),
+                "x":         loc.get("x"),
+                "y":         loc.get("y"),
+                "area":      loc.get("area", "No location yet"),
                 "timestamp": loc["timestamp"].isoformat() if loc.get("timestamp") else None,
             })
     return jsonify(result)
@@ -71,6 +73,7 @@ def admin_list_users():
         ]
     users = list(users_col.find(query, {"password_hash": 0}).limit(100))
     return jsonify(serialize(users))
+
 @bp.route("/api/admin/location-history", methods=["GET"])
 @require_auth(roles=["admin"])
 def admin_location_history():

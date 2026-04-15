@@ -31,6 +31,7 @@ def localize():
             "timestamp": datetime.utcnow()
         })
     return jsonify(loc)
+
 @bp.route("/api/user/heartbeat", methods=["POST"])
 @require_auth(roles=["user", "admin", "operator"])
 @limiter.limit("60 per minute")
@@ -85,3 +86,42 @@ def post_location_history():
         "timestamp": datetime.utcnow()
     })
     return jsonify({"success": True}), 201
+
+@bp.route("/api/get-location", methods=["GET"])
+@require_auth()
+def get_location():
+    last = locations_col.find_one(
+        {"user_id": ObjectId(request.user_id)}, 
+        sort=[("timestamp", -1)]
+    )
+    if not last:
+        return jsonify({"success": True, "location": None})
+    
+    loc = {
+        "floor": last.get("floor", 1),
+        "x":     last.get("x", 0),
+        "y":     last.get("y", 0),
+        "area":  last.get("area", "Unknown")
+    }
+    return jsonify({"success": True, "location": loc})
+
+@bp.route("/api/update-location", methods=["POST"])
+@require_auth(roles=["user"])
+@limiter.limit("60 per minute")
+def update_location():
+    data    = request.get_json() or {}
+    signals = data.get("signals", [])
+    if not signals:
+        return jsonify({"error": "No signals provided", "code": 400}), 400
+
+    loc = knn_localize(signals)
+    locations_col.insert_one({
+        "user_id":   ObjectId(request.user_id),
+        "floor":     loc["floor"],
+        "x":         loc["x"],
+        "y":         loc["y"],
+        "area":      loc["area"],
+        "signals":   signals,
+        "timestamp": datetime.utcnow()
+    })
+    return jsonify({"success": True, "location": loc})

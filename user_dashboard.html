@@ -69,7 +69,7 @@
     .floor-map{
       background:#070f15;border:1px solid var(--border);
       height:260px;margin-bottom:20px;position:relative;overflow:hidden;
-      display:flex;align-items:center;justify-content:center;
+      display:flex;align-items:center;justify-content:center; 
     }
     .floor-map svg{width:100%;height:100%;}
 
@@ -297,7 +297,7 @@
       <!-- Info chips -->
       <div class="loc-info-grid">
         <div class="loc-chip">
-          <div class="lc-label">Floor</div>
+          <div class="lc-label">Z-Axis (Floor)</div>
           <div class="lc-val" id="chipFloor">—</div>
         </div>
         <div class="loc-chip">
@@ -310,7 +310,7 @@
         </div>
       </div>
 
-      <button class="btn-locate" id="locBtn" onclick="localize()"><span>Scan &amp; Locate</span></button>
+      <button class="btn-locate" id="locBtn" onclick="localize()"><span>Update Location</span></button>
 
       <!-- Agent Status Bar -->
       <div style="margin-top:14px;display:flex;align-items:center;gap:10px;font-size:.68rem;">
@@ -425,14 +425,14 @@
     renderSignals(signals);
 
     try {
-      const res = await fetch('/api/localize', {
+      const res = await fetch('/api/update-location', {
         method:'POST',
         headers:{'Content-Type':'application/json',
           'Authorization':'Bearer '+localStorage.getItem('zt_token')},
         body: JSON.stringify({signals})
       });
       const data = await res.json();
-      if (res.ok) showLocation(data, false); // false = already saved by backend
+      if (res.ok) showLocation(data.location || data, false); // false = already saved by backend
       else throw new Error();
     } catch {
       // Backend nahi chala — mock result use karo aur manually save karo
@@ -522,48 +522,31 @@
 
 
 
-  // ── AUTO HEARTBEAT (every 30s) ──────────────────────────────
-  // Silently scans + sends location to backend so admin sees live data.
-  // No button press needed — runs automatically after login.
-  async function sendHeartbeat() {
+  // ── FETCH LAST KNOWN LOCATION ──────────────────────────────
+  // Fetches the user's last saved location on page load without re-scanning.
+  async function fetchLastLocation() {
     const token = localStorage.getItem('zt_token');
-    if (!token) return;  // not logged in, skip
-
-    let signals = [];
-    try {
-      // Try real Wi-Fi agent first
-      const res = await fetch(AGENT_URL + '/scan', {signal: AbortSignal.timeout(4000)});
-      const data = await res.json();
-      if (data.success && data.signals.length) {
-        signals = data.signals;
-      }
-    } catch {
-      // Agent offline — use mock signals with slight random variation
-      signals = MOCK_SIGNALS.map(s => ({...s, rssi: s.rssi + Math.floor(Math.random()*8 - 4)}));
-    }
+    if (!token) return;
 
     try {
-      const res = await fetch('/api/user/heartbeat', {
-        method: 'POST',
+      const res = await fetch('/api/get-location', {
+        method: 'GET',
         headers: {
-          'Content-Type': 'application/json',
           'Authorization': 'Bearer ' + token
-        },
-        body: JSON.stringify({ signals })
+        }
       });
       if (res.ok) {
         const data = await res.json();
-        // Silently update UI if location changed without full scan animation
-        if (data.location && !document.getElementById('locBtn').disabled) {
-          showLocation(data.location);
+        if (data.location) {
+          showLocation(data.location, false);
+          document.getElementById('signalSource').textContent = '🔵 Last Known Location';
         }
       }
-    } catch { /* silent fail — backend might be starting up */ }
+    } catch { /* silent fail */ }
   }
 
-  // Send heartbeat immediately on load, then every 30 seconds
-  sendHeartbeat();
-  setInterval(sendHeartbeat, 30000);
+  // Fetch immediately on load once
+  fetchLastLocation();
 </script>
 </body>
 </html>

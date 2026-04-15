@@ -143,6 +143,13 @@
       margin-bottom: 16px; display: none;
     }
     .error-msg.show { display: block; }
+    .auth-tabs { display: flex; border-bottom: 1px solid var(--border); margin-bottom: 24px; }
+    .auth-tab { flex: 1; text-align: center; padding: 12px; font-size: .75rem; letter-spacing: .15em; text-transform: uppercase; cursor: pointer; color: var(--muted); border-bottom: 2px solid transparent; transition: all .2s; }
+    .auth-tab:hover { color: var(--text); }
+    .auth-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .signup-field { display: none; }
+    .mode-signup .signup-field { display: block; }
+    .mode-signup .login-field { display: none; }
   </style>
 </head>
 <body>
@@ -157,8 +164,11 @@
     <p>Wi-Fi Indoor Positioning System · ALPHACODERS</p>
   </div>
 
-  <div class="card">
-    <div class="section-label">Authentication</div>
+  <div class="card" id="authCard">
+    <div class="auth-tabs">
+      <div class="auth-tab active" onclick="setMode('login')">Log In</div>
+      <div class="auth-tab" onclick="setMode('signup')">Sign Up</div>
+    </div>
 
     <div id="errorMsg" class="error-msg"></div>
 
@@ -171,6 +181,16 @@
       </div>
     </div>
 
+    <div class="form-group signup-field">
+      <label>Full Name</label>
+      <input type="text" id="fullname" placeholder="Enter your full name" autocomplete="off"/>
+    </div>
+    
+    <div class="form-group signup-field">
+      <label>Email Address</label>
+      <input type="email" id="email" placeholder="Enter your email" autocomplete="off"/>
+    </div>
+
     <div class="form-group">
       <label>Username / Email</label>
       <input type="text" id="username" placeholder="Enter your username" autocomplete="off"/>
@@ -180,7 +200,7 @@
       <input type="password" id="password" placeholder="••••••••"/>
     </div>
 
-    <button class="btn-login" onclick="doLogin()"><span>Authenticate &rarr;</span></button>
+    <button class="btn-login" id="authBtn" onclick="doAuth()"><span>Authenticate &rarr;</span></button>
 
     <div class="status-line">
       <span class="dot"></span>
@@ -191,6 +211,25 @@
 
 <script>
   let selectedRole = 'user';
+  let authMode = 'login'; // 'login' or 'signup'
+
+  function setMode(mode) {
+    authMode = mode;
+    const card = document.getElementById('authCard');
+    const tabs = document.querySelectorAll('.auth-tab');
+    
+    tabs[0].classList.toggle('active', mode === 'login');
+    tabs[1].classList.toggle('active', mode === 'signup');
+    
+    if (mode === 'signup') {
+      card.classList.add('mode-signup');
+      document.getElementById('authBtn').innerHTML = '<span>Sign Up &rarr;</span>';
+    } else {
+      card.classList.remove('mode-signup');
+      document.getElementById('authBtn').innerHTML = '<span>Log In &rarr;</span>';
+    }
+    document.getElementById('errorMsg').classList.remove('show');
+  }
 
   function selectRole(btn, role) {
     document.querySelectorAll('.role-btn').forEach(b => b.classList.remove('active'));
@@ -198,9 +237,11 @@
     selectedRole = role;
   }
 
-  async function doLogin() {
+  async function doAuth() {
     const username = document.getElementById('username').value.trim();
     const password = document.getElementById('password').value;
+    const fullname = document.getElementById('fullname').value.trim();
+    const email    = document.getElementById('email').value.trim();
     const errEl    = document.getElementById('errorMsg');
     errEl.classList.remove('show');
 
@@ -210,11 +251,22 @@
       return;
     }
 
+    if (authMode === 'signup' && (!fullname || !email)) {
+      errEl.textContent = 'Please enter all fields to sign up.';
+      errEl.classList.add('show');
+      return;
+    }
+
     try {
-      const res  = await fetch('/api/login', {
+      const endpoint = authMode === 'signup' ? '/api/signup' : '/api/login';
+      const bodyPayload = authMode === 'signup' 
+        ? { username, password, name: fullname, email, role: selectedRole }
+        : { username, password, role: selectedRole };
+
+      const res  = await fetch(endpoint, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ username, password, role: selectedRole })
+        body:    JSON.stringify(bodyPayload)
       });
       const data = await res.json();
 
@@ -229,7 +281,7 @@
         };
         window.location.href = redirectMap[data.role] || 'user_dashboard.html';
       } else {
-        errEl.textContent = data.message || 'Invalid credentials.';
+        errEl.textContent = data.error || data.message || 'Authentication failed.';
         errEl.classList.add('show');
       }
     } catch (e) {
@@ -238,7 +290,7 @@
     }
   }
 
-  document.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Enter') doAuth(); });
 </script>
 </body>
 </html>

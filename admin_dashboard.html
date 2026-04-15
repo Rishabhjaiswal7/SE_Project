@@ -237,7 +237,7 @@
         <button class="floor-btn active" onclick="setFloor(3,this)">3</button>
         <span style="width:1px;height:14px;background:var(--border)"></span>
         <span style="font-size:.6rem;color:var(--muted)">&#11044; Active user &nbsp;&#9675; Router AP &nbsp; &#8226; Fingerprint point</span>
-        <span class="refresh-info">Refresh: <span id="countdown" style="color:var(--accent2)">5s</span></span>
+        <span class="refresh-info">Refresh: <span id="countdown" style="color:var(--accent2)">10s</span></span>
       </div>
       <div class="canvas-wrap" id="canvasWrap">
         <canvas id="floorCanvas"></canvas>
@@ -652,9 +652,9 @@ function renderCards(){
 }
 
 // ═══════════════════════════════════════════════════════
-//  POLLING — every 5s
+//  POLLING — every 10s
 // ═══════════════════════════════════════════════════════
-let pollInt, cdInt, cdVal=5;
+let pollInt, cdInt, cdVal=10;
 
 async function poll(){
   try{
@@ -676,7 +676,7 @@ async function poll(){
     });
 
     drawMap(); renderDots(); renderCards();
-    cdVal = 5;
+    cdVal = 10;
 
     // Show seed hint if no location data exists at all
     if(!data.length){
@@ -699,12 +699,12 @@ async function poll(){
 
 function startPoll(){
   poll();
-  pollInt = setInterval(poll,5000);
+  pollInt = setInterval(poll,10000);
   cdInt   = setInterval(()=>{
     cdVal--;
     const el=document.getElementById('countdown');
     if(el) el.textContent=Math.max(0,cdVal)+'s';
-    if(cdVal<=0) cdVal=5;
+    if(cdVal<=0) cdVal=10;
   },1000);
 }
 function stopPoll(){ clearInterval(pollInt); clearInterval(cdInt); }
